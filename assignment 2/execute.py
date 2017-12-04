@@ -1,30 +1,26 @@
 #! python
 # (c) DL, UTA, 2009 - 2016
 import  sys, string, time
-# import numpy as np
 wordsize = 24                                        # everything is a word
 numregbits = 3                                       # actually +1, msb is indirect bit
 opcodesize = 5
 
 w, h = 2, 4;                                         # 4 x 2
-Instruction_Cache = [[0 for x in range(w)] for y in range(h)]
-Data_Cache = [[0 for x in range(w)] for y in range(h)]
+I_Cache = [[0 for x in range(w)] for y in range(h)]
+D_Cache = [[0 for x in range(w)] for y in range(h)]
 
-Instruction_tag = [0 for y in range(h)]
-Instruction_valid = [0 for y in range(h)]
-Instruction_Hit = 0
-Instruction_Miss = 0
-Instruction_Com_Miss=0
-Instruction_Con_Miss=0
-Instruction_Cap_Miss=0
-Data_Hit = 0
-Data_Miss = 0
-Data_Com_Miss=0
-Data_Con_Miss=0
-Data_Cap_Miss=0
-
-global cache
-global metadata
+I_tag = [0 for y in range(h)]
+I_valid = [0 for y in range(h)]
+I_Hit = 0
+I_Miss = 0
+I_Com_Miss=0
+I_Con_Miss=0
+I_Cap_Miss=0
+D_Hit = 0
+D_Miss = 0
+D_Com_Miss=0
+D_Con_Miss=0
+D_Cap_Miss=0
 addrsize = wordsize - (opcodesize+numregbits+1)      # num bits in address
 memloadsize = 1024                                   # change this for larger programs
 numregs = 2**numregbits
@@ -67,52 +63,40 @@ def getcodemem ( a ):                               # Instruction Cache (4 x 2)
     # getcodecache(memval)
     return getcodecache(a)
 def getcodecache(a):    
-    global Instruction_tag, Instruction_valid, Instruction_Miss, Instruction_Hit,Instruction_Cap_Miss,Instruction_Com_Miss,Instruction_Con_Miss
-    address = a + reg[ codeseg ]    
-    # word = mem[ address ] & 0x1
-    # block = ( mem[ address ] >> 1 ) & 0x3
+    global I_tag, I_valid, I_Miss, I_Hit,I_Cap_Miss,I_Com_Miss,I_Con_Miss
+    address = a + reg[ codeseg ]
     word =  address & 0x1
     block =  (address >> 1 ) & 0x3    
     tagval = address >> 3  
     memval = mem[ address ]
 
-    # # misses
-    # if address is even
-    # cold/compulsory miss
-    
-    if (Instruction_Cache[block][word] and (Instruction_valid[block] == 0)):
+    # misses, if address is even then cold/compulsory miss
+    # compulsory miss for the word 1
+    if ((I_Cache[block][word] == 0) and (I_valid[block] == 0)):
       # increase the compulsory miss counter
-      Instruction_Com_Miss = Instruction_Com_Miss + 1
+      I_Com_Miss = I_Com_Miss + 1
     else:
-      if((address % 2 == 0) and (Instruction_valid[block] == 1) ):
-        Instruction_Con_Miss = Instruction_Con_Miss + 1      
-      else: Instruction_Con_Miss= Instruction_Con_Miss+1 # increase the conflict miss counter
+      # increase the conflict miss counter      
+      if((address % 2 == 0) and (I_valid[block] == 1) ):
+        I_Con_Miss = I_Con_Miss + 1      
 
-      # if address is odd
-      if(address % 2 == 1):
-        address_odd = (a + reg[ codeseg ]) - 1    
-        word_odd =  address_odd & 0x1
-        block_odd =  (address_odd >> 1 ) & 0x3    
-        tagval = address_odd >> 3      
-        if (Instruction_tag[block_odd] == tagval):
-          pass
-      if(Instruction_Cache[block][word] == memval):
-          Instruction_Hit = Instruction_Hit + 1
-          return ( Instruction_Cache[block][word] )
-    Instruction_Miss = Instruction_Miss + 1
-    Instruction_Cache[block][word] = memval
+      if(I_Cache[block][word] == memval):
+          I_Hit = I_Hit + 1
+          return ( I_Cache[block][word] )
+    I_Miss = I_Miss + 1
+    I_Cache[block][word] = memval
 
     # check for tags on miss, if tag even, add the same and next memory location content
     
     # first case, for address 0 in memory
     if(address % 2 == 0):
-      Instruction_tag[block] = tagval
-      Instruction_valid[block] = 1
+      I_tag[block] = tagval
+      I_valid[block] = 1
       # get the details for the next memory block
       address_even = (a + reg[ codeseg ]) + 1    
       word_even =  address_even & 0x1
       block_even =  (address_even >> 1 ) & 0x3                      
-      Instruction_Cache[block_even][word_even] = mem[ address_even ]
+      I_Cache[block_even][word_even] = mem[ address_even ]
     
     # check for tags on miss, if tag odd, add the same and previous memory location content    
     if(address % 2 == 1):
@@ -121,26 +105,26 @@ def getcodecache(a):
       word_odd =  address_odd & 0x1
       block_odd =  (address_odd >> 1 ) & 0x3    
       tagval = address_odd >> 3
-      Instruction_tag[block_odd] = tagval
-      Instruction_valid[block_odd] = 1              
-      Instruction_Cache[block_odd_even][word_odd] = mem[ address_odd ]
+      I_tag[block_odd] = tagval
+      I_valid[block_odd] = 1              
+      I_Cache[block_odd_even][word_odd] = mem[ address_odd ]
     
-    return (Instruction_Cache[block][word])
+    return (I_Cache[block][word])
 def getdatamem ( a ):                               # Data Cache (4 x 2)
     # get code memory at this address
     return getdatacache( a )
 def getdatacache(a):
-    global Data_Miss, Data_Hit
+    global D_Miss, D_Hit
     address = a + reg[ dataseg ]        
     word = address  & 0x1
     block = (  address  >> 1 ) & 0x3
     memval = mem[ address ]
-    if(Data_Cache[block][word] == memval):
-        Data_Hit = Data_Hit + 1
-        return ( Data_Cache[block][word] )
-    Data_Miss = Data_Miss + 1
-    Data_Cache[block][word] = memval
-    return (Data_Cache[block][word])
+    if(D_Cache[block][word] == memval):
+        D_Hit = D_Hit + 1
+        return ( D_Cache[block][word] )
+    D_Miss = D_Miss + 1
+    D_Cache[block][word] = memval
+    return (D_Cache[block][word])
 def getregval ( r ):
     # get reg or indirect value
     if ( (r & (1<<numregbits)) == 0 ):               # not indirect
@@ -164,10 +148,10 @@ def dumpstate ( d ):
     elif ( d == 2 ):
         print mem
     elif ( d == 3 ):
-        print 'clock=', clock, 'IC=', ic, 'Instruction_Hit=', Instruction_Hit, 'Instruction_Miss=', Instruction_Miss, 'Data_Hit=', 'Instruction Compulsory Miss',Instruction_Com_Miss,Data_Hit, 'Data_Miss=', Data_Miss, 'Coderefs=', numcoderefs,'Datarefs=', numdatarefs, 'Start Time=', starttime, 'Currently=', time.time() 
+        print 'clock=', clock, 'IC=', ic, 'I_Hit=', I_Hit, 'I_Miss=', I_Miss, 'D_Hit=', 'I_Com_Miss=', I_Com_Miss,'I_Con_Miss=', I_Con_Miss,'D_Hit=',D_Hit, 'D_Miss=', D_Miss, 'Coderefs=', numcoderefs,'Datarefs=', numdatarefs, 'Run Time=', time.time()- starttime 
 def trap ( t ):
     # unusual cases
-    # trap 0 illegal instruction
+    # trap 0 illegal I
     # trap 1 arithmetic overflow
     # trap 2 sys call
     # trap 3+ user
@@ -193,7 +177,7 @@ opcodes = { 1: (2, 'add'), 2: ( 2, 'sub'),
 startexechere( 0 )                                  # start execution here if no "go"
 loadmem()                                           # load binary executable
 ip = 0                                              # start execution at codeseg location 0
-# while instruction is not halt
+# while I is not halt
 while( 1 ):
    ir = getcodemem( ip )                            # - fetch
    ip = ip + 1
@@ -205,7 +189,7 @@ while( 1 ):
                                                     # - operand fetch
    if not (opcodes.has_key( opcode )):
       tval, treg = trap(0) 
-      if (tval == -1):                              # illegal instruction
+      if (tval == -1):                              # illegal I
          break
    memdata = 0                                      #     contents of memory for loads
    if opcodes[ opcode ] [0] == 1:                   #     dec, inc, ret type
@@ -267,7 +251,7 @@ while( 1 ):
         reg[ reg1 ] = result
    elif (opcode == 16):                        # store return address
         reg[ reg1 ] = result
-   # end of instruction loop     
+   # end of Instruction loop     
 # end of execution
 
    
